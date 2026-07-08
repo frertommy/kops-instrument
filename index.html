@@ -70,25 +70,65 @@
     margin-top:14px;text-shadow:0 0 var(--glow) var(--ink);text-wrap:balance}
   .lede{margin-top:16px;max-width:600px;font-size:11.5px;line-height:1.85;letter-spacing:.03em;opacity:.72}
 
-  /* the catalog: eight seal-tiles */
-  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;margin-top:46px}
-  .tile{position:relative;border:1px solid rgba(233,242,244,.45);background:rgba(0,0,0,.32);
-    padding:20px 18px 16px;transition:transform .25s ease,border-color .25s ease}
-  .tile:hover{transform:translateY(-4px);border-color:var(--seal)}
-  .tile .ph{position:absolute;top:0;left:10px;transform:translateY(-50%);background:var(--void);
-    padding:0 7px;font-size:8px;letter-spacing:.24em;text-transform:uppercase;opacity:.75}
-  .tile .seal{width:52px;height:52px;border:1.5px solid var(--seal);color:var(--seal);display:flex;
-    align-items:center;justify-content:center;font-size:30px;line-height:1;
-    text-shadow:0 0 var(--glow) var(--seal);margin-bottom:14px;
-    font-family:"Hiragino Mincho ProN","Noto Serif CJK SC","SimSun",serif}
-  .tile h3{font-size:12px;letter-spacing:.2em;text-transform:uppercase;font-weight:400;
-    padding-bottom:8px;border-bottom:1px solid rgba(233,242,244,.35);margin-bottom:10px;display:flex}
-  .tile h3 .n{margin-left:auto;color:var(--dim);font-size:9px;letter-spacing:.1em;align-self:center}
-  .tile .idx{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.08em;
-    line-height:2.1;font-variant-numeric:tabular-nums}
-  .tile .idx .nm{color:var(--ink);opacity:.75}
-  .tile .idx b{font-weight:400}
+  /* the catalog: the kops arcana — tarot-format holo cards */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:30px;margin-top:52px}
+  .card{perspective:750px;animation:float 7s ease-in-out infinite}
+  .card:nth-child(2n){animation-delay:-2.3s}
+  .card:nth-child(3n){animation-delay:-4.1s}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+  .cardin{--rx:0deg;--ry:0deg;--gx:50%;--gy:40%;
+    position:relative;aspect-ratio:63/88;background:#050505;
+    border:1px solid rgba(233,242,244,.55);padding:12px;
+    transform:rotateX(var(--rx)) rotateY(var(--ry));transform-style:preserve-3d;
+    transition:transform .6s cubic-bezier(.2,.85,.3,1),border-color .3s ease}
+  .cardin.tilting{transition:transform .06s linear,border-color .3s ease}
+  .cardin:hover{border-color:var(--seal)}
+  .cardframe{position:absolute;inset:7px;border:1px solid rgba(233,242,244,.25);pointer-events:none}
+  /* crop-corner brackets */
+  .cardframe::before,.cardframe::after,.cardframe i::before,.cardframe i::after{
+    content:'';position:absolute;width:11px;height:11px;border:0 solid var(--seal);opacity:.85}
+  .cardframe::before{top:-1px;left:-1px;border-top-width:1.5px;border-left-width:1.5px}
+  .cardframe::after{top:-1px;right:-1px;border-top-width:1.5px;border-right-width:1.5px}
+  .cardframe i::before{bottom:-1px;left:-1px;border-bottom-width:1.5px;border-left-width:1.5px}
+  .cardframe i::after{bottom:-1px;right:-1px;border-bottom-width:1.5px;border-right-width:1.5px}
+  .card .rn{text-align:center;font-size:10px;letter-spacing:.42em;color:var(--dim);
+    margin-top:8px;text-transform:uppercase}
+  .card .rn b{color:var(--ink);font-weight:400}
+  .card .art{position:relative;margin:12px 14px 0;aspect-ratio:1/1.02;border:1px solid rgba(233,242,244,.3);
+    display:flex;align-items:center;justify-content:center;overflow:hidden;
+    background:radial-gradient(circle at 50% 42%, rgba(255,90,69,.13), transparent 62%)}
+  .card .art .seal{width:58%;aspect-ratio:1;border:2px solid var(--seal);color:var(--seal);
+    display:flex;align-items:center;justify-content:center;font-size:clamp(30px,3.4vw,44px);line-height:1;
+    text-shadow:0 0 6px var(--seal);
+    font-family:"Hiragino Mincho ProN","Noto Serif CJK SC","SimSun",serif;
+    transform:translateZ(24px)}
+  .card .art .orn{position:absolute;font-size:8px;letter-spacing:.3em;color:var(--dim);opacity:.7}
+  .card .art .orn.t{top:6px} .card .art .orn.b{bottom:6px}
+  .card .tname{margin:13px 14px 0;padding-bottom:7px;border-bottom:1px solid rgba(233,242,244,.3);
+    display:flex;align-items:baseline;font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;
+    text-shadow:0 0 var(--glow) var(--ink)}
+  .card .tname .n{margin-left:auto;color:var(--dim);font-size:8px;letter-spacing:.12em}
+  .card .rows{margin:8px 14px 0}
+  .card .idx{display:flex;justify-content:space-between;font-size:9.5px;letter-spacing:.06em;
+    line-height:2.15;font-variant-numeric:tabular-nums}
+  .card .idx .nm{color:var(--ink);opacity:.72}
+  .card .idx b{font-weight:400}
+  .card .foot{position:absolute;left:0;right:0;bottom:9px;text-align:center;font-size:7.5px;
+    letter-spacing:.4em;color:var(--dim);text-transform:uppercase}
+  /* holo foil + glare, driven by the tilt */
+  .card .foil{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:screen;
+    background:linear-gradient(115deg,transparent 22%,rgba(255,90,69,.20) 36%,rgba(139,127,212,.24) 50%,
+      rgba(95,214,169,.20) 64%,transparent 78%);
+    background-size:220% 220%;
+    background-position:calc(var(--gx)) calc(var(--gy));
+    transition:opacity .4s ease}
+  .card .glare{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:overlay;
+    background:radial-gradient(circle at var(--gx) var(--gy), rgba(233,242,244,.4), transparent 52%);
+    transition:opacity .4s ease}
+  .cardin.tilting .foil{opacity:.85}
+  .cardin.tilting .glare{opacity:.9}
   .up{color:var(--jade)} .dn{color:var(--rose)}
+  @media (prefers-reduced-motion:reduce){ .card{animation:none} }
 
   /* pipeline */
   .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0;margin-top:46px;
@@ -324,15 +364,43 @@ function fmtVal(ix){
   return pre+v.toFixed(2);
 }
 const tileEls=[];
+const ROMAN=['I','II','III','IV','V','VI','VII','VIII'];
 {
   const grid=document.getElementById('tiles');
   CATS.forEach((c,i)=>{
-    const d=document.createElement('div'); d.className='tile';
-    d.innerHTML='<div class="ph">// seal '+String(i+1).padStart(2,'0')+'</div>'
-      +'<div class="seal">'+c.ch+'</div>'
-      +'<h3>'+c.name+'<span class="n">'+c.n+' indices</span></h3>'
-      +c.idx.map((ix,k)=>'<div class="idx"><span class="nm">'+ix[0]+'</span><b data-i="'+i+'-'+k+'">'+fmtVal(ix)+'</b></div>').join('');
+    const d=document.createElement('div'); d.className='card';
+    d.innerHTML='<div class="cardin">'
+      +'<div class="cardframe"><i></i></div>'
+      +'<div class="rn">· <b>'+ROMAN[i]+'</b> ·</div>'
+      +'<div class="art"><span class="orn t">— ◆ —</span><span class="seal">'+c.ch+'</span><span class="orn b">— ◆ —</span></div>'
+      +'<div class="tname">'+c.name+'<span class="n">'+c.n+' indices</span></div>'
+      +'<div class="rows">'
+      +c.idx.map((ix,k)=>'<div class="idx"><span class="nm">'+ix[0]+'</span><b data-i="'+i+'-'+k+'">'+fmtVal(ix)+'</b></div>').join('')
+      +'</div>'
+      +'<div class="foot">kops arcana</div>'
+      +'<div class="foil"></div><div class="glare"></div>'
+      +'</div>';
     grid.appendChild(d); tileEls.push(d);
+  });
+}
+/* the wobble: cards tilt toward the cursor, pokémon-holo style */
+if(!matchMedia('(prefers-reduced-motion:reduce)').matches){
+  tileEls.forEach(cardEl=>{
+    const inner=cardEl.querySelector('.cardin');
+    cardEl.addEventListener('pointermove',e=>{
+      const r=inner.getBoundingClientRect();
+      const px=(e.clientX-r.left)/r.width, py=(e.clientY-r.top)/r.height;
+      inner.classList.add('tilting');
+      inner.style.setProperty('--rx',((0.5-py)*14).toFixed(2)+'deg');
+      inner.style.setProperty('--ry',((px-0.5)*16).toFixed(2)+'deg');
+      inner.style.setProperty('--gx',(px*100).toFixed(1)+'%');
+      inner.style.setProperty('--gy',(py*100).toFixed(1)+'%');
+    });
+    cardEl.addEventListener('pointerleave',()=>{
+      inner.classList.remove('tilting');
+      inner.style.setProperty('--rx','0deg');
+      inner.style.setProperty('--ry','0deg');
+    });
   });
 }
 function tickIndex(ci,ki){
