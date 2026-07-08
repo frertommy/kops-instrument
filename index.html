@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KOPS — crypto oracles read prices. we create them.</title>
+<meta name="description" content="KOPS: the exotic oracle network. verifiable, sub-second on-chain price feeds for the markets that never had one. a landing rework in the instrument idiom.">
+<style>
+  :root{
+    --void:#000000;
+    --ink:#e9f2f4;          /* phosphor */
+    --dim:#7e8180;
+    --seal:#ff5a45;         /* vermillion — the oracle's stamp */
+    --jade:#5fd6a9;         /* up */
+    --rose:#e0687c;         /* down */
+    --violet:#8b7fd4;       /* developer purple */
+    --glow:3.5px;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html{background:var(--void);scroll-behavior:smooth}
+  body{font-family:var(--mono);color:var(--ink);overflow-x:hidden}
+  ::selection{background:var(--seal);color:#000}
+
+  /* ---------- fixed HUD ---------- */
+  #hud{position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;gap:14px;
+    padding:12px 18px;pointer-events:none}
+  #hud canvas{width:26px;height:26px;image-rendering:pixelated}
+  #hud .wm{font-size:13px;letter-spacing:.34em;text-transform:uppercase;text-shadow:0 0 var(--glow) var(--ink)}
+  #hud .st{font-size:9px;letter-spacing:.14em;color:var(--dim);margin-left:6px}
+  #hud nav{margin-left:auto;pointer-events:auto;display:flex;gap:16px;align-items:center}
+  #hud nav a{color:var(--dim);text-decoration:none;font-size:9px;letter-spacing:.2em;text-transform:uppercase}
+  #hud nav a:hover{color:var(--ink)}
+  #hud .cta{color:var(--seal);border:1px solid var(--seal);padding:7px 14px;background:rgba(0,0,0,.5);
+    text-shadow:0 0 var(--glow) var(--seal)}
+  #hud .cta:hover{background:var(--seal);color:#000!important;text-shadow:none}
+
+  /* ---------- hero ---------- */
+  #hero{position:relative;height:100vh;min-height:660px;overflow:hidden}
+  #hc{position:absolute;inset:0;width:100%;height:100%}
+  #hero .plateno{position:absolute;top:54px;left:50%;transform:translateX(-50%);text-align:center;z-index:5;pointer-events:none}
+  #hero .plateno .th{font-size:12px;letter-spacing:.34em;text-transform:uppercase;text-shadow:0 0 var(--glow) var(--ink)}
+  #hero .plateno .tb{font-size:8.5px;letter-spacing:.18em;color:var(--dim);margin-top:4px;text-transform:uppercase}
+  #hero .mast{position:absolute;left:5vw;bottom:11vh;z-index:5;pointer-events:none;max-width:560px}
+  #wordmark{width:min(360px,64vw);height:auto;display:block}
+  #hero .tag{margin-top:18px;font-size:clamp(11px,1.5vw,15px);letter-spacing:.24em;text-transform:uppercase;
+    text-shadow:0 0 var(--glow) var(--ink)}
+  #hero .tag b{color:var(--seal);font-weight:400;text-shadow:0 0 var(--glow) var(--seal)}
+  #hero .sub{margin-top:14px;max-width:440px;font-size:10.5px;line-height:1.85;letter-spacing:.04em;opacity:.68}
+  #hero .ctas{margin-top:22px;display:flex;gap:10px;pointer-events:auto}
+  .btn{text-decoration:none;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;padding:10px 18px}
+  .btn.primary{color:#000;background:var(--seal);border:1px solid var(--seal)}
+  .btn.primary:hover{background:transparent;color:var(--seal);text-shadow:0 0 var(--glow) var(--seal)}
+  .btn.ghost{color:var(--ink);border:1px solid rgba(233,242,244,.4)}
+  .btn.ghost:hover{border-color:var(--ink)}
+  #feedbox{position:absolute;right:24px;bottom:24px;z-index:5;text-align:right;pointer-events:none}
+  #feedbox .n{font-size:clamp(16px,2vw,22px);letter-spacing:.08em;color:var(--ink);
+    font-variant-numeric:tabular-nums;text-shadow:0 0 var(--glow) var(--ink)}
+  #feedbox .n b{color:var(--seal);font-weight:400}
+  #feedbox .l{font-size:8px;letter-spacing:.26em;text-transform:uppercase;color:var(--dim);margin-top:4px}
+  #scrollcue{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;
+    font-size:8.5px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase;animation:cue 2.4s ease-in-out infinite}
+  @keyframes cue{0%,100%{opacity:.25}50%{opacity:.85}}
+
+  /* ---------- sections ---------- */
+  section{position:relative;padding:110px 6vw;max-width:1220px;margin:0 auto}
+  .eyebrow{font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--dim)}
+  .eyebrow b{color:var(--seal);font-weight:400}
+  h2{font-size:clamp(20px,3vw,30px);letter-spacing:.16em;text-transform:uppercase;font-weight:400;
+    margin-top:14px;text-shadow:0 0 var(--glow) var(--ink);text-wrap:balance}
+  .lede{margin-top:16px;max-width:600px;font-size:11.5px;line-height:1.85;letter-spacing:.03em;opacity:.72}
+
+  /* the catalog: eight seal-tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px;margin-top:46px}
+  .tile{position:relative;border:1px solid rgba(233,242,244,.45);background:rgba(0,0,0,.32);
+    padding:20px 18px 16px;transition:transform .25s ease,border-color .25s ease}
+  .tile:hover{transform:translateY(-4px);border-color:var(--seal)}
+  .tile .ph{position:absolute;top:0;left:10px;transform:translateY(-50%);background:var(--void);
+    padding:0 7px;font-size:8px;letter-spacing:.24em;text-transform:uppercase;opacity:.75}
+  .tile .seal{width:52px;height:52px;border:1.5px solid var(--seal);color:var(--seal);display:flex;
+    align-items:center;justify-content:center;font-size:30px;line-height:1;
+    text-shadow:0 0 var(--glow) var(--seal);margin-bottom:14px;
+    font-family:"Hiragino Mincho ProN","Noto Serif CJK SC","SimSun",serif}
+  .tile h3{font-size:12px;letter-spacing:.2em;text-transform:uppercase;font-weight:400;
+    padding-bottom:8px;border-bottom:1px solid rgba(233,242,244,.35);margin-bottom:10px;display:flex}
+  .tile h3 .n{margin-left:auto;color:var(--dim);font-size:9px;letter-spacing:.1em;align-self:center}
+  .tile .idx{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.08em;
+    line-height:2.1;font-variant-numeric:tabular-nums}
+  .tile .idx .nm{color:var(--ink);opacity:.75}
+  .tile .idx b{font-weight:400}
+  .up{color:var(--jade)} .dn{color:var(--rose)}
+
+  /* pipeline */
+  .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0;margin-top:46px;
+    border:1px solid rgba(233,242,244,.35)}
+  .step{padding:26px 22px;border-right:1px solid rgba(233,242,244,.35);position:relative}
+  .step:last-child{border-right:0}
+  .step .no{font-size:9px;letter-spacing:.26em;color:var(--dim)}
+  .step h3{font-size:12px;letter-spacing:.18em;text-transform:uppercase;font-weight:400;margin:12px 0 10px}
+  .step p{font-size:10px;line-height:1.8;opacity:.68}
+  .step .rail{position:absolute;left:22px;right:22px;bottom:18px;height:1px;background:rgba(233,242,244,.2)}
+  .step .rail i{position:absolute;top:-2px;width:5px;height:5px;background:var(--seal);
+    box-shadow:0 0 6px var(--seal);animation:flow 3.2s linear infinite}
+  .step:nth-child(2) .rail i{animation-delay:.8s}
+  .step:nth-child(3) .rail i{animation-delay:1.6s}
+  .step:nth-child(4) .rail i{animation-delay:2.4s}
+  @keyframes flow{0%{left:0;opacity:0}12%{opacity:1}88%{opacity:1}100%{left:calc(100% - 5px);opacity:0}}
+  .metrics{display:flex;gap:0;margin-top:26px;border:1px solid rgba(233,242,244,.25);max-width:560px}
+  .metric{flex:1;padding:14px 16px;border-right:1px solid rgba(233,242,244,.25)}
+  .metric:last-child{border-right:0}
+  .metric .v{font-size:16px;letter-spacing:.08em;color:var(--seal);text-shadow:0 0 var(--glow) var(--seal)}
+  .metric .k{font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-top:5px}
+
+  /* developers */
+  .termwrap{margin-top:46px;border:1px solid rgba(139,127,212,.55);background:rgba(0,0,0,.4);position:relative;max-width:760px}
+  .termwrap .ph{position:absolute;top:0;left:10px;transform:translateY(-50%);background:var(--void);
+    padding:0 7px;font-size:8px;letter-spacing:.24em;text-transform:uppercase;color:var(--violet)}
+  .term{padding:24px 22px;font-size:11px;line-height:2;letter-spacing:.02em;overflow-x:auto;white-space:pre}
+  .term .c{color:var(--dim)} .term .k2{color:var(--violet)} .term .s{color:var(--jade)} .term .f{color:var(--ink)}
+  .term .cursor{display:inline-block;width:7px;height:13px;background:var(--violet);vertical-align:-2px;
+    animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .devquote{margin-top:22px;font-size:11px;letter-spacing:.06em;opacity:.72;max-width:560px;line-height:1.85}
+  .devquote b{color:var(--violet);font-weight:400}
+
+  footer{border-top:1px solid rgba(233,242,244,.2);margin-top:40px;padding:36px 6vw 110px;
+    display:flex;flex-wrap:wrap;gap:18px;align-items:center;max-width:1220px;margin-left:auto;margin-right:auto}
+  footer .f1{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+  footer a{color:var(--ink);text-decoration:none;border-bottom:1px solid rgba(233,242,244,.3);
+    font-size:9px;letter-spacing:.14em}
+  footer a:hover{color:var(--seal);border-color:var(--seal)}
+  footer .spacer{flex:1}
+
+  #crt{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+  #crt>div{position:absolute;inset:-8px}
+  #crt .s{background:repeating-linear-gradient(0deg,rgba(0,0,0,.28) 0 1px,transparent 1px 3px)}
+  #crt .v{background:radial-gradient(ellipse 85% 85% at center,transparent 55%,rgba(0,0,0,.4) 100%)}
+  #crt .g{opacity:.05;mix-blend-mode:overlay;background-size:160px 160px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  @media (max-width:760px){
+    #hud nav a:not(.cta){display:none}
+    #feedbox{display:none}
+    .step{border-right:0;border-bottom:1px solid rgba(233,242,244,.35)}
+    .step:last-child{border-bottom:0}
+  }
+  @media (prefers-reduced-motion:reduce){ .step .rail i,#scrollcue,.term .cursor{animation:none} }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <canvas id="mark-hud" width="52" height="52"></canvas>
+  <span class="wm">kops</span>
+  <span class="st" id="hudst">oracle · warming up</span>
+  <nav>
+    <a href="#catalog">oracles</a>
+    <a href="#pipeline">how it works</a>
+    <a href="#dev">developers</a>
+    <a class="cta" href="https://www.kops.ai" target="_blank" rel="noopener">read the docs →</a>
+  </nav>
+</div>
+
+<div id="hero">
+  <canvas id="hc"></canvas>
+  <div class="plateno"><div class="th">the oracle works</div><div class="tb">plate no. i — an exotic oracle instrument</div></div>
+  <div class="mast">
+    <canvas id="wordmark" width="1300" height="350"></canvas>
+    <div class="tag">crypto oracles read prices. <b>we create them.</b></div>
+    <div class="sub">the exotic oracle network — verifiable, sub-second on-chain feeds for the markets
+      that never had one. inflation, employment, policy, geopolitics and the ai economy,
+      synthesized from prediction markets, derivatives and verified outcomes.</div>
+    <div class="ctas">
+      <a class="btn primary" href="https://www.kops.ai" target="_blank" rel="noopener">start building</a>
+      <a class="btn ghost" href="#catalog">explore the indices</a>
+    </div>
+  </div>
+  <div id="feedbox"><div class="n" id="feedN"><b>0</b> prices struck</div><div class="l">live sim · sub-second settlement</div></div>
+  <div id="scrollcue">▼ the catalog</div>
+</div>
+
+<section id="catalog">
+  <div class="eyebrow">// the catalog · <b>29 indices · eight seals</b></div>
+  <h2>pricing the markets defi couldn't</h2>
+  <p class="lede">every category carries a seal. when the oracle strikes, the seal lands on-chain —
+    a continuous experimental index for a signal that never had a spot price. live values below are a simulation.</p>
+  <div class="tiles" id="tiles"></div>
+</section>
+
+<section id="pipeline">
+  <div class="eyebrow">// the mechanism · <b>chaos in, price out</b></div>
+  <h2>how a price gets made</h2>
+  <div class="steps">
+    <div class="step"><div class="no">01 / ingest</div>
+      <h3>ingest the chaos</h3>
+      <p>prediction markets, derivatives, official prints, verified outcomes — the raw signals arrive noisy, sparse and late.</p>
+      <div class="rail"><i></i></div></div>
+    <div class="step"><div class="no">02 / attest</div>
+      <h3>attest &amp; verify</h3>
+      <p>independent reporters cross-check every observation. disagreement is data; collusion is slashing.</p>
+      <div class="rail"><i></i></div></div>
+    <div class="step"><div class="no">03 / settle</div>
+      <h3>settle the feed</h3>
+      <p>on-chain median aggregation strikes the price and stamps the seal. deterministically reconstructible, block by block.</p>
+      <div class="rail"><i></i></div></div>
+    <div class="step"><div class="no">04 / build</div>
+      <h3>build markets</h3>
+      <p>perps, options, prediction products — the sdk turns any index into a market surface.</p>
+      <div class="rail"><i></i></div></div>
+  </div>
+  <div class="metrics">
+    <div class="metric"><div class="v">&lt;1s</div><div class="k">latency</div></div>
+    <div class="metric"><div class="v">24/7</div><div class="k">coverage</div></div>
+    <div class="metric"><div class="v">29</div><div class="k">live indices</div></div>
+  </div>
+</section>
+
+<section id="dev">
+  <div class="eyebrow" style="color:var(--violet)">// developers · <b style="color:var(--violet)">one sdk</b></div>
+  <h2>reads like chainlink. ships like a rest client.</h2>
+  <div class="termwrap"><div class="ph">// kops-sdk · quickstart</div>
+    <div class="term"><span class="c">// price a market that never had a price</span>
+<span class="k2">import</span> { Kops } <span class="k2">from</span> <span class="s">'@kops/sdk'</span>;
+
+<span class="k2">const</span> kops = <span class="k2">new</span> <span class="f">Kops</span>(rpc);
+<span class="k2">const</span> kost = <span class="k2">await</span> kops.<span class="f">feed</span>(<span class="s">'AI/KOST'</span>);
+
+kost.<span class="f">latest</span>();   <span class="c">// { value: 2.14e6, attested: '0.4s', seal: '目' }</span>
+kost.<span class="f">stream</span>(tick =&gt; market.<span class="f">reprice</span>(tick));<span class="cursor"></span></div>
+  </div>
+  <p class="devquote">the same three calls price <b>inflation</b>, <b>datacenter power</b>, or <b>a geopolitical event</b> —
+    and every tick settles on-chain with the reporter set that attested it.</p>
+  <div class="ctas" style="margin-top:26px;display:flex;gap:10px">
+    <a class="btn primary" style="background:var(--violet);border-color:var(--violet)" href="https://www.kops.ai" target="_blank" rel="noopener">read the sdk docs</a>
+    <a class="btn ghost" href="#pipeline">see the architecture</a>
+  </div>
+</section>
+
+<footer>
+  <span class="f1">kops · the exotic oracle network</span>
+  <span class="spacer"></span>
+  <a href="https://www.kops.ai" target="_blank" rel="noopener">kops.ai</a>
+  <a href="https://www.kops.ai/landing/" target="_blank" rel="noopener">original landing</a>
+  <a href="https://twitter.com/kopshype" target="_blank" rel="noopener">@kopshype</a>
+  <span class="f1">// a rework in the instrument idiom</span>
+</footer>
+
+<div id="crt"><div class="s"></div><div class="v"></div><div class="g"></div></div>
+
+<script>
+'use strict';
+/* ============================================================================
+   KOPS — THE ORACLE WORKS. A landing rework in the instrument idiom.
+   Chaos particles (polls, prints, prediction markets) pour into the oracle;
+   every strike stamps a vermillion CJK seal, appends a block to the chain,
+   and ticks one of eight orbiting index tiles. Hand-rolled ortho canvas.
+   ========================================================================= */
+
+/* ---- the eight seals (canonical CJK components, 10x10 pixel bitmaps) ---- */
+const SEALS={
+  '心':['..........','..........','..#...##..','.........#','.#.......#','.#...##..#','.#...##..#','..#.....##','...#####..','..........'],
+  '山':['....##....','....##....','.#..##..#.','.#..##..#.','.#..##..#.','.#..##..#.','.#..##..#.','.########.','..........','..........'],
+  '口':['..........','.########.','.#......#.','.#......#.','.#......#.','.#......#.','.#......#.','.#......#.','.########.','..........'],
+  '火':['....#.....','.#..##..#.','..#.##.#..','....##....','...####...','...#..#...','..#....#..','.#......#.','#........#','..........'],
+  '目':['.#######..','.#.....#..','.#.....#..','.#######..','.#.....#..','.#.....#..','.#######..','.#.....#..','.#.....#..','.#######..'],
+  '日':['.########.','.#......#.','.#......#.','.#......#.','.########.','.#......#.','.#......#.','.#......#.','.########.','..........'],
+  '石':['#########.','....#.....','...##.....','..##......','.#..#####.','.#..#...#.','#...#...#.','....#...#.','....#####.','..........'],
+  '力':['..........','.########.','.....#..#.','.....#..#.','....##..#.','....#...#.','...##...#.','..##....#.','.##...#.#.','##.....##.'],
+};
+/* ---- the catalog: eight categories, live-sim values ---- */
+const CATS=[
+  { ch:'心', name:'ai economy', n:4, idx:[['KOST','$',2.14e6,'M'],['AI-DEMAND','',67,'%']] },
+  { ch:'石', name:'compute',    n:5, idx:[['CAPEX','$',85.5e9,'B'],['CHECK-FLOW','',233,'']] },
+  { ch:'力', name:'power',      n:3, idx:[['AI-POWER','',67,'%'],['GRID-X','',1.42,'x']] },
+  { ch:'山', name:'macro',      n:5, idx:[['INFL-NOW','',2.9,'%'],['R12','',18,'%']] },
+  { ch:'口', name:'policy',     n:3, idx:[['FED-PATH','',3.62,'%'],['SHUTDOWN','',11,'%']] },
+  { ch:'火', name:'volatility', n:3, idx:[['EXO-VOL','',41.8,''],['MACRO-VIX','',22.4,'']] },
+  { ch:'日', name:'events',     n:3, idx:[['ELECTION','',54,'%'],['LAUNCH-OK','',88,'%']] },
+  { ch:'目', name:'token cost', n:3, idx:[['TOK-1M','$',2.14,''],['INFER-X','',0.86,'x']] },
+];
+/* live sim state per index */
+for(const c of CATS) for(const ix of c.idx){ ix.push(0); }   // [name,pre,val,suf,delta]
+
+const WM_F={
+  K:['#...#','#..#.','#.#..','##...','#.#..','#..#.','#...#'],
+  O:['.###.','#...#','#...#','#...#','#...#','#...#','.###.'],
+  P:['####.','#...#','#...#','####.','#....','#....','#....'],
+  S:['.####','#....','#....','.###.','....#','....#','####.'],
+};
+function drawWordmark(cv2,rev){
+  const x=cv2.getContext('2d');
+  x.clearRect(0,0,cv2.width,cv2.height);
+  const word='KOPS', px=cv2.width/(word.length*6+1);
+  const oy=(cv2.height-7*px)/2;
+  for(let i=0;i<word.length;i++){
+    const gl=WM_F[word[i]], gx=px*(i*6+0.5);
+    for(let r=0;r<7;r++) for(let c2=0;c2<5;c2++){
+      if(gl[r][c2]!=='#') continue;
+      if(((r*31+c2*17+i*7)%100)/100>rev) continue;
+      x.fillStyle='#e9f2f4';
+      x.fillRect(gx+c2*px+px*0.08, oy+r*px+px*0.08, px*0.84, px*0.84);
+    }
+  }
+}
+/* hud mark: seal box with the current glyph */
+function drawHudMark(cv2,ch){
+  const x=cv2.getContext('2d'), Wc=cv2.width;
+  x.clearRect(0,0,Wc,Wc);
+  x.strokeStyle='#ff5a45'; x.lineWidth=3;
+  x.strokeRect(2,2,Wc-4,Wc-4);
+  const rows=SEALS[ch], px=(Wc-12)/10;
+  x.fillStyle='#ff5a45';
+  for(let r=0;r<10;r++) for(let c2=0;c2<10;c2++)
+    if(rows[r][c2]==='#') x.fillRect(6+c2*px, 6+r*px, px*0.9, px*0.9);
+}
+
+/* ---------- DOM catalog tiles ---------- */
+function fmtVal(ix){
+  const [,pre,v,suf]=ix;
+  if(suf==='M') return pre+(v/1e6).toFixed(2)+'M';
+  if(suf==='B') return pre+(v/1e9).toFixed(1)+'B';
+  if(suf==='%') return v.toFixed(1)+'%';
+  if(suf==='x') return v.toFixed(2)+'x';
+  return pre+v.toFixed(2);
+}
+const tileEls=[];
+{
+  const grid=document.getElementById('tiles');
+  CATS.forEach((c,i)=>{
+    const d=document.createElement('div'); d.className='tile';
+    d.innerHTML='<div class="ph">// seal '+String(i+1).padStart(2,'0')+'</div>'
+      +'<div class="seal">'+c.ch+'</div>'
+      +'<h3>'+c.name+'<span class="n">'+c.n+' indices</span></h3>'
+      +c.idx.map((ix,k)=>'<div class="idx"><span class="nm">'+ix[0]+'</span><b data-i="'+i+'-'+k+'">'+fmtVal(ix)+'</b></div>').join('');
+    grid.appendChild(d); tileEls.push(d);
+  });
+}
+function tickIndex(ci,ki){
+  const ix=CATS[ci].idx[ki];
+  const d=(Math.random()*2-1)*0.02*ix[2];
+  ix[2]=Math.max(0.01,ix[2]+d); ix[4]=d>=0?1:-1;
+  const el=document.querySelector('[data-i="'+ci+'-'+ki+'"]');
+  if(el){ el.textContent=fmtVal(ix)+' '+(d>=0?'▲':'▼');
+    el.className=d>=0?'up':'dn'; }
+}
+
+/* ============================================================ hero scene */
+const AZ=0.5, EL=0.38;
+const ca=Math.cos(AZ), sa=Math.sin(AZ), ce=Math.cos(EL), se=Math.sin(EL);
+let W=0,H=0,S=84,CX=0,CY=0,DPR=1;
+const hero=document.getElementById('hero');
+const cv=document.getElementById('hc'), ctx=cv.getContext('2d');
+const SC=document.createElement('canvas'), sctx=SC.getContext('2d');
+const FILTER_OK=(()=>{const t=document.createElement('canvas').getContext('2d');t.filter='blur(1px)';return t.filter==='blur(1px)';})();
+function proj(x,y,z){
+  const x1=x*ca - z*sa, z1=x*sa + z*ca;
+  const y2=y*ce - z1*se, z2=y*se + z1*ce;
+  return [CX + x1*S, CY - y2*S, z2];
+}
+function projN(nx,ny,nz){ const z1=nx*sa+nz*ca; return ny*se + z1*ce; }
+function resize(){
+  W=hero.clientWidth; H=hero.clientHeight; DPR=Math.min(devicePixelRatio||1,2);
+  cv.width=W*DPR; cv.height=H*DPR; SC.width=W*DPR; SC.height=H*DPR;
+  S=Math.min(W/15.5, H/8.6); CX=W*0.52; CY=H*0.42;
+}
+addEventListener('resize',resize);
+
+const ORACLE={x:0.3, z:0.1};
+const CHAOS={x:-4.9, z:-0.3};
+const CHAIN0={x:3.4, z:1.5};
+const GROUND={x0:-7,x1:7.6,z0:-2.3,z1:2.7,step:0.55};
+function line3(g,a,b){ const p=proj(a[0],a[1],a[2]), q=proj(b[0],b[1],b[2]);
+  g.beginPath(); g.moveTo(p[0],p[1]); g.lineTo(q[0],q[1]); g.stroke(); }
+function drawBoxG(g,x,y0,z,w,h,d,alpha,col,ry){
+  const cr=Math.cos(ry||0), sr=Math.sin(ry||0);
+  const rot=(lx,lz)=>[x+lx*cr-lz*sr, z+lx*sr+lz*cr];
+  const V=[];
+  for(const [lx,ly,lz] of [[-1,0,-1],[1,0,-1],[1,0,1],[-1,0,1],[-1,1,-1],[1,1,-1],[1,1,1],[-1,1,1]]){
+    const [wx,wz]=rot(lx*w/2,lz*d/2); V.push(proj(wx, y0+ly*h, wz));
+  }
+  const faces=[[0,1,5,4],[2,3,7,6],[1,2,6,5],[3,0,4,7],[4,5,6,7]];
+  const norms=[[0,0,-1],[0,0,1],[1,0,0],[-1,0,0],[0,1,0]];
+  g.lineWidth=1;
+  for(let f=0;f<5;f++){
+    const n=norms[f], nx=n[0]*cr-n[2]*sr, nz=n[0]*sr+n[2]*cr;
+    if(projN(nx,n[1],nz)<=0.001) continue;
+    g.beginPath();
+    faces[f].forEach((vi,k)=>{ const p=V[vi]; k?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); });
+    g.closePath(); g.fillStyle='#000'; g.fill();
+    g.strokeStyle=col||'#e9f2f4'; g.globalAlpha=alpha; g.stroke(); g.globalAlpha=1;
+  }
+}
+
+/* orbiting index tiles: textured thin boxes facing outward */
+const TILE_TEX=CATS.map(()=>{ const c2=document.createElement('canvas'); c2.width=100; c2.height=136; return c2; });
+function paintTile(i){
+  const c=CATS[i], x=TILE_TEX[i].getContext('2d');
+  x.clearRect(0,0,100,136);
+  x.strokeStyle='rgba(233,242,244,.85)'; x.lineWidth=2; x.strokeRect(1,1,98,134);
+  x.strokeStyle='#ff5a45'; x.lineWidth=2; x.strokeRect(26,10,48,48);
+  const rows=SEALS[c.ch], px=4.2;
+  x.fillStyle='#ff5a45';
+  for(let r=0;r<10;r++) for(let c3=0;c3<10;c3++)
+    if(rows[r][c3]==='#') x.fillRect(29+c3*px, 13+r*px, px*0.88, px*0.88);
+  x.fillStyle='#e9f2f4'; x.font='10px '+getComputedStyle(document.body).fontFamily;
+  x.textAlign='center';
+  x.fillText(c.name.toUpperCase(), 50, 78);
+  const ix=c.idx[0];
+  x.fillStyle=ix[4]>=0?'#5fd6a9':'#e0687c';
+  x.font='11px '+getComputedStyle(document.body).fontFamily;
+  x.fillText(fmtVal(ix), 50, 100);
+  x.fillStyle='rgba(233,242,244,.45)'; x.font='8px '+getComputedStyle(document.body).fontFamily;
+  x.fillText(ix[0], 50, 116);
+}
+CATS.forEach((_,i)=>paintTile(i));
+
+/* particles, ticks, chain */
+const PARTS=[]; const TICKS=[]; const CHAINB=[]; let strikes=0;
+let temp=0, moveAcc=0, lastMX=0, lastMY=0, haveM=false;
+addEventListener('pointermove',e=>{
+  if(haveM) moveAcc+=Math.hypot(e.clientX-lastMX,e.clientY-lastMY);
+  lastMX=e.clientX; lastMY=e.clientY; haveM=true;
+});
+const easeSmooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
+const REDUCE=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let introT=0, lastT=performance.now()/1000;
+let strikeT=0, curSeal=0, ghostA=0, ghostPrev=7, flash=0;
+
+function frame(){
+  const now=performance.now()/1000;
+  const rawDt=now-lastT, stepDt=Math.min(0.35,rawDt); lastT=now;
+  temp=Math.max(0,Math.min(2.5,temp+moveAcc*0.01)*0.94); moveAcc=0;
+  introT+=stepDt;
+  const it=Math.min(1,introT/6);
+  const rev={ground:easeSmooth(it/0.25), oracle:easeSmooth((it-0.12)/0.3),
+             tiles:easeSmooth((it-0.3)/0.3), chain:easeSmooth((it-0.42)/0.3), call:easeSmooth((it-0.62)/0.3)};
+
+  drawWordmark(document.getElementById('wordmark'), easeSmooth(it/0.5));
+
+  /* strike cycle */
+  if(it>0.55){
+    strikeT+=stepDt*(1+temp*0.8);
+    if(strikeT>1.7){
+      strikeT=0; ghostPrev=curSeal; curSeal=(curSeal+1)%8; ghostA=0; flash=1; strikes++;
+      const ci=curSeal, ki=(Math.random()*CATS[ci].idx.length)|0;
+      tickIndex(ci,ki); paintTile(ci);
+      drawHudMark(document.getElementById('mark-hud'), CATS[ci].ch);
+      TICKS.push({t:0});
+      CHAINB.push({born:now, seal:CATS[ci].ch});
+      if(CHAINB.length>10) CHAINB.shift();
+    }
+  }
+  ghostA=Math.min(1,ghostA+stepDt*1.4);
+  if(flash>0) flash-=stepDt*2.2;
+
+  sctx.setTransform(DPR,0,0,DPR,0,0);
+  sctx.clearRect(0,0,W,H);
+  if(!REDUCE){ CX=W*0.52+Math.sin(now*0.13)*6; CY=H*0.42+Math.cos(now*0.09)*4; }
+
+  /* ghost seal: huge, faint, crossfading per strike */
+  if(it>0.35){
+    const px=Math.min(30,W*0.021);
+    const ox=CX-8.2*S+0, oy=CY-3.4*S;
+    const drawG=(ch,alpha)=>{
+      const rows=SEALS[ch]; sctx.fillStyle='#e9f2f4'; sctx.globalAlpha=alpha;
+      for(let r=0;r<10;r++) for(let c2=0;c2<10;c2++)
+        if(rows[r][c2]==='#') sctx.fillRect(ox+c2*px, oy+r*px, px*0.88, px*0.88);
+      sctx.globalAlpha=1;
+    };
+    drawG(CATS[ghostPrev].ch, 0.05*(1-ghostA)*easeSmooth((it-0.35)/0.2));
+    drawG(CATS[curSeal].ch, 0.055*ghostA*easeSmooth((it-0.35)/0.2));
+  }
+
+  /* fogged ground */
+  const fogOf=z2=>Math.max(0.32,1-((z2+2.6)/5.2)*0.62);
+  sctx.strokeStyle='#7e8180'; sctx.lineWidth=1.5;
+  const g=rev.ground;
+  const seg=(a,b)=>{ const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+    sctx.globalAlpha=0.15*fogOf((a[2]+b[2])/2);
+    sctx.beginPath(); sctx.moveTo(mx+(a[0]-mx)*g,my+(a[1]-my)*g); sctx.lineTo(mx+(b[0]-mx)*g,my+(b[1]-my)*g); sctx.stroke(); };
+  for(let x=GROUND.x0;x<=GROUND.x1+.01;x+=GROUND.step)
+    for(let z=GROUND.z0;z<GROUND.z1-.01;z+=GROUND.step) seg(proj(x,0,z),proj(x,0,z+GROUND.step));
+  for(let z=GROUND.z0;z<=GROUND.z1+.01;z+=GROUND.step)
+    for(let x=GROUND.x0;x<GROUND.x1-.01;x+=GROUND.step) seg(proj(x,0,z),proj(x+GROUND.step,0,z));
+  sctx.globalAlpha=1;
+
+  /* chaos: raw signals jitter and drift toward the oracle */
+  if(rev.oracle>0.3 && !REDUCE){
+    if(PARTS.length<70 && Math.random()<0.5+temp*0.3)
+      PARTS.push({x:CHAOS.x+(Math.random()-0.5)*2.6, y:0.15+Math.random()*1.6,
+                  z:CHAOS.z+(Math.random()-0.5)*1.8, v:0.5+Math.random()*0.7});
+    sctx.globalCompositeOperation='lighter';
+    for(let i=PARTS.length-1;i>=0;i--){
+      const q=PARTS[i];
+      q.x+=(ORACLE.x-q.x)*q.v*stepDt*(0.5+temp*0.3);
+      q.y+=(1.15-q.y)*q.v*stepDt*0.5 + Math.sin(now*7+i)*0.004;
+      q.z+=(ORACLE.z-q.z)*q.v*stepDt*(0.5+temp*0.3);
+      if(Math.hypot(q.x-ORACLE.x,q.z-ORACLE.z)<0.35){ PARTS.splice(i,1); continue; }
+      const p=proj(q.x,q.y,q.z);
+      sctx.fillStyle='#e9f2f4'; sctx.globalAlpha=0.55;
+      sctx.fillRect(p[0]-0.9,p[1]-0.9,1.8,1.8);
+    }
+    sctx.globalCompositeOperation='source-over'; sctx.globalAlpha=1;
+  }
+  /* chaos source cubes */
+  if(rev.oracle>0.001){
+    const CUBES=[[-0.7,-0.7,0.4],[0.3,0.55,0.3],[-1.35,0.35,0.34],[0.15,-0.35,0.24],[-0.5,1.0,0.26]];
+    CUBES.forEach((c2,i)=>drawBoxG(sctx,CHAOS.x+c2[0],0,CHAOS.z+c2[1],c2[2],c2[2]*(1+0.5*Math.sin(i*2.1)),c2[2],
+      0.45*rev.oracle,'#e9f2f4', i*0.6+(REDUCE?0:now*0.1)));
+  }
+
+  /* the oracle: two-tier monolith + spinning reporter cubes */
+  if(rev.oracle>0.001){
+    drawBoxG(sctx,ORACLE.x,0,ORACLE.z,1.15,1.5*rev.oracle,0.75,0.95,'#e9f2f4',0);
+    drawBoxG(sctx,ORACLE.x,1.5*rev.oracle,ORACLE.z,0.8,0.75*rev.oracle,0.52,0.95,'#e9f2f4',0);
+    const ry=2.25*rev.oracle+0.35;
+    for(let k=0;k<3;k++){
+      const a=(REDUCE?0.6:now*0.7)+k*2.094;
+      const rx=ORACLE.x+Math.cos(a)*0.95, rz=ORACLE.z+Math.sin(a)*0.95;
+      drawBoxG(sctx,rx,ry,rz,0.16,0.16,0.16,0.85,'#e9f2f4',a);
+      if(flash>0.4){ sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=(flash-0.4)*1.4;
+        line3(sctx,[rx,ry+0.08,rz],[ORACLE.x,ry+0.35,ORACLE.z]); sctx.globalAlpha=1; }
+    }
+    /* strike flash: vermillion ring */
+    if(flash>0){
+      const p=proj(ORACLE.x,1.1,ORACLE.z);
+      sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=Math.max(0,flash)*0.9;
+      const r=(1.15-flash)*1.1*S;
+      sctx.beginPath(); sctx.ellipse(p[0],p[1],r,r*0.55,0,0,6.2832); sctx.stroke();
+      sctx.globalAlpha=1;
+    }
+  }
+
+  /* orbiting index tiles */
+  if(rev.tiles>0.001){
+    const R=2.35, order=[];
+    for(let i=0;i<8;i++){
+      const a=(REDUCE?0:now*0.14)+i*0.7854;
+      const tx=ORACLE.x+Math.cos(a)*R, tz=ORACLE.z+Math.sin(a)*R*0.72;
+      order.push({i,a,tx,tz,depth:proj(tx,0,tz)[2]});
+    }
+    order.sort((p,q)=>p.depth-q.depth);
+    for(const o of order){
+      const nx=Math.cos(o.a), nz=Math.sin(o.a);
+      const bob=0.55+Math.sin(now*1.3+o.i)*0.05;
+      const hl=(o.i===curSeal&&flash>0)?'#ff5a45':'#e9f2f4';
+      drawBoxG(sctx,o.tx,bob,o.tz,0.62,0.85,0.07,0.9*rev.tiles,hl,Math.atan2(nz,nx)+Math.PI/2);
+      /* textured face when facing camera */
+      const fdot=projN(nx,0,nz);
+      if(fdot>0.1){
+        const u=[-nz,0,nx];                        // width axis
+        const cxw=o.tx+nx*0.045, czw=o.tz+nz*0.045;
+        const TL=proj(cxw-u[0]*0.31, bob+0.85, czw-u[2]*0.31);
+        const TR=proj(cxw+u[0]*0.31, bob+0.85, czw+u[2]*0.31);
+        const BL=proj(cxw-u[0]*0.31, bob, czw-u[2]*0.31);
+        const tex=TILE_TEX[o.i];
+        sctx.save();
+        sctx.globalAlpha=rev.tiles*Math.min(1,(fdot-0.1)/0.25);
+        sctx.setTransform((TR[0]-TL[0])/tex.width*DPR,(TR[1]-TL[1])/tex.width*DPR,
+                          (BL[0]-TL[0])/tex.height*DPR,(BL[1]-TL[1])/tex.height*DPR,
+                          TL[0]*DPR, TL[1]*DPR);
+        sctx.drawImage(tex,0,0);
+        sctx.restore();
+        sctx.setTransform(DPR,0,0,DPR,0,0);
+      }
+    }
+  }
+
+  /* tick pulses: oracle → chain */
+  sctx.globalCompositeOperation='lighter';
+  for(let i=TICKS.length-1;i>=0;i--){
+    const t2=TICKS[i]; t2.t+=stepDt*1.4;
+    if(t2.t>=1){ TICKS.splice(i,1); continue; }
+    const bx=CHAIN0.x+(CHAINB.length-1)*0.5;
+    const p=proj(ORACLE.x+(bx-ORACLE.x)*t2.t, 1.1*(1-t2.t)+0.25, ORACLE.z+(CHAIN0.z-ORACLE.z)*t2.t);
+    sctx.fillStyle='#ff5a45'; sctx.globalAlpha=0.85;
+    sctx.fillRect(p[0]-1.4,p[1]-1.4,2.8,2.8);
+  }
+  sctx.globalCompositeOperation='source-over'; sctx.globalAlpha=1;
+
+  /* the chain: settled blocks slide as new ones append */
+  if(rev.chain>0.001){
+    for(let i=0;i<CHAINB.length;i++){
+      const b=CHAINB[i], age=Math.min(1,(now-b.born)*2.5);
+      const bx=CHAIN0.x+i*0.5, col=(i===CHAINB.length-1&&age<0.6)?'#ff5a45':'#e9f2f4';
+      drawBoxG(sctx,bx,0,CHAIN0.z,0.36,0.36*age*rev.chain,0.36,0.8*rev.chain,col,0);
+      if(i>0){ sctx.strokeStyle='#e9f2f4'; sctx.globalAlpha=0.35*rev.chain;
+        line3(sctx,[bx-0.5+0.18,0.18,CHAIN0.z],[bx-0.18,0.18,CHAIN0.z]); sctx.globalAlpha=1; }
+    }
+  }
+
+  /* in-scene callouts */
+  if(rev.call>0.01){
+    const fam=getComputedStyle(document.body).fontFamily;
+    const items=[
+      {p:proj(CHAOS.x-0.2,1.9,CHAOS.z), top:true, t:'THE SIGNALS', b:'noisy · sparse · late', col:'#e9f2f4'},
+      {p:proj(ORACLE.x,2.75,ORACLE.z), top:true, t:'THE ORACLE', b:'strikes a price · stamps the seal', col:'#ff5a45'},
+      {p:proj(CHAIN0.x+1.2,0,CHAIN0.z+0.25), top:false, t:'THE CHAIN', b:'deterministically reconstructible', col:'#e9f2f4'},
+    ];
+    for(const c2 of items){
+      const a=rev.call, px2=Math.max(110,Math.min(W-110,c2.p[0]));
+      const py=c2.top? c2.p[1]-52 : c2.p[1]+66;
+      sctx.strokeStyle='#e9f2f4'; sctx.globalAlpha=0.5*a; sctx.setLineDash([3,3]);
+      sctx.beginPath(); sctx.moveTo(c2.p[0],c2.p[1]+(c2.top?-6:6));
+      sctx.lineTo(c2.p[0], c2.top?py+10:py-22); sctx.stroke(); sctx.setLineDash([]);
+      sctx.globalAlpha=0.85*a; sctx.beginPath(); sctx.arc(c2.p[0],c2.p[1],5,0,6.2832); sctx.stroke();
+      sctx.textAlign='center'; sctx.fillStyle=c2.col;
+      sctx.font='10px '+fam; sctx.globalAlpha=a*0.95; sctx.fillText(c2.t,px2,py-8);
+      const w2=sctx.measureText(c2.t).width;
+      sctx.strokeStyle=c2.col; sctx.globalAlpha=a*0.7;
+      sctx.beginPath(); sctx.moveTo(px2-w2/2-8,py-3); sctx.lineTo(px2+w2/2+8,py-3); sctx.stroke();
+      sctx.fillStyle='#e9f2f4'; sctx.globalAlpha=a*0.55; sctx.font='9px '+fam;
+      sctx.fillText(c2.b,px2,py+9);
+      sctx.globalAlpha=1;
+    }
+  }
+
+  /* composite + bloom */
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.drawImage(SC,0,0);
+  if(FILTER_OK){ ctx.save(); ctx.filter='blur(5px)'; ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=0.55; ctx.drawImage(SC,0,0); ctx.restore(); }
+
+  document.getElementById('feedN').innerHTML='<b>'+strikes+'</b> prices struck';
+  document.getElementById('hudst').textContent = it<1 ? 'oracle · warming up'
+    : 'oracle live · seal '+CATS[curSeal].ch+' · '+CATS[curSeal].name;
+  requestAnimationFrame(frame);
+}
+drawHudMark(document.getElementById('mark-hud'), CATS[0].ch);
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
