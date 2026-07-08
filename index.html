@@ -215,7 +215,7 @@
       <a class="btn ghost" href="#catalog">explore the indices</a>
     </div>
   </div>
-  <div id="feedbox"><div class="n" id="feedN"><b>map</b> · loop 01</div><div class="l">the metamorphosis · live sim</div></div>
+  <div id="feedbox"><div class="n" id="feedN"><b>0</b> prices struck</div><div class="l">the synthesis line · live sim</div></div>
   <div id="scrollcue">▼ the catalog</div>
 </div>
 
@@ -413,357 +413,409 @@ function tickIndex(ci,ki){
 }
 
 /* ============================================================ hero scene
-   THE METAMORPHOSIS — one swarm, four forms, forever:
-   the map (where the signals live) → the tape (raw prints) →
-   the surfaces (continuous indices) → the seals (the arcana, on-chain) → …
+   THE SYNTHESIS LINE — four machines on one stage, value flowing through:
+   the world (a spinning signal globe) → the tape (a ticker monolith) →
+   the surfaces (a live chart in a wireframe case) → the arcana (a floating
+   card striking seals onto the chain). Hand-rolled ortho canvas, no libs.
    ========================================================================= */
-let W=0,H=0,DPR=1;
+const AZ=0.5, EL=0.38;
+const ca=Math.cos(AZ), sa=Math.sin(AZ), ce=Math.cos(EL), se=Math.sin(EL);
+let W=0,H=0,S=84,CX=0,CY=0,DPR=1;
 const hero=document.getElementById('hero');
 const cv=document.getElementById('hc'), ctx=cv.getContext('2d');
 const SC=document.createElement('canvas'), sctx=SC.getContext('2d');
 const FILTER_OK=(()=>{const t=document.createElement('canvas').getContext('2d');t.filter='blur(1px)';return t.filter==='blur(1px)';})();
 const REDUCE=matchMedia('(prefers-reduced-motion:reduce)').matches;
 const easeSmooth=t=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
-const easeIO=t=>{t=Math.max(0,Math.min(1,t));return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;};
-
+function proj(x,y,z){
+  const x1=x*ca - z*sa, z1=x*sa + z*ca;
+  const y2=y*ce - z1*se, z2=y*se + z1*ce;
+  return [CX + x1*S, CY - y2*S, z2];
+}
+function projN(nx,ny,nz){ const z1=nx*sa+nz*ca; return ny*se + z1*ce; }
 function resize(){
   W=hero.clientWidth; H=hero.clientHeight; DPR=Math.min(devicePixelRatio||1,2);
   cv.width=W*DPR; cv.height=H*DPR; SC.width=W*DPR; SC.height=H*DPR;
-  rebuildAll();
+  S=Math.min(W/16, H/8.8); CX=W*0.52; CY=H*0.40;
 }
 addEventListener('resize',resize);
 
-/* formation region: centre-right, clear of the masthead */
-function region(){
-  const mob=W<760;
-  return { x0:W*(mob?0.06:0.30), x1:W*(mob?0.94:0.95),
-           y0:H*(mob?0.10:0.12), y1:H*(mob?0.62:0.80) };
-}
+/* ---- stations ---- */
+const GLOBE={x:-5.7, y:1.5, z:-0.15, r:1.05};
+const TAPE={x:-2.3, z:0.45, w:1.05, h:2.15, d:0.42};
+const CHART={x:1.55, z:-0.1, w:2.8, h:1.7, d:0.9, y0:0.15};
+const CARD={x:5.05, cy:1.85, cz:0.35, hw:0.62, hh:0.86};
+const CTILT=0.52, CHX=-Math.sin(CTILT), CHZ=Math.cos(CTILT);
+const cardPt=(u,v)=>[CARD.x+CHX*u, CARD.cy+v, CARD.cz+CHZ*u];
+const CHAIN0={x:4.55, z:2.1};
+const GROUND={x0:-7.4,x1:7.8,z0:-2.3,z1:2.8,step:0.55};
 
-/* ---- the world, dotted (66 x 28, artistic licence at this resolution) ---- */
-const WORLD=[
-'..................................................................',
-'......................###.............#########..................',
-'...####..###########..###......##.#########################......',
-'..####################.........############################......',
-'.#####################.......###############################.....',
-'..###################.....###################################....',
-'...#################......####################################...',
-'....###############.......###################################....',
-'.....#############.........####.############################.....',
-'......###########...........###..#########.#######.#########.....',
-'.......#########.............###..########..#####...######.......',
-'........######...............####.#######....####....###.........',
-'.........#####................####.######.....##......##.........',
-'..........###................#####..#####....#.......#...........',
-'...........##................######...###.........##.##.#........',
-'............#.....##.........######....##.........#.####.##......',
-'.................####.........######................########.....',
-'..............########........#####.................######.......',
-'..............#########.......#####...................##.........',
-'...............#########......####...............................',
-'...............#########......####................######.....#...',
-'................#######.......###................########........',
-'................######........###...............##########.......',
-'.................####.........##.................#########.......',
-'.................###..........#...................######.........',
-'..................##..............................................',
-'..................#...............................................',
-'..................................................................'];
-const PINGS=[[7,5],[15,7],[33,4],[52,6],[56,21],[45,12]];   // [col,row] signal sites
-
-/* ---- palette indices ---- */
-const COLS=['#e9f2f4','#ff5a45','#5fd6a9','#e0687c','#6a6f78'];
-
-/* ---- the swarm ---- */
-const NP=1600;
-const P=[];
-for(let i=0;i<NP;i++) P.push({x:Math.random()*innerWidth,y:Math.random()*innerHeight,
-  fx:0,fy:0,tx:0,ty:0,c:0,tc:0,delay:Math.random()*0.45,sw:(Math.random()*2-1)});
-
-/* ---- phase machinery ---- */
-const PHASES=[
-  {key:'map',    dur:5.4, cap:'01 · the map — where the signals live'},
-  {key:'tape',   dur:4.8, cap:'02 · the tape — raw prints, on time'},
-  {key:'surface',dur:5.0, cap:'03 · the surfaces — continuous indices'},
-  {key:'seal',   dur:5.8, cap:'04 · the arcana — sealed on-chain'},
-];
-const MORPH=1.55;
-let phase=0, phT=0, loops=0;
-let targets=[], scaffold=null;                    // scaffold: phase-specific direct-draw data
-
-/* golden-angle shuffle so reassignment crosses the field (the swirl) */
-function assign(){
-  if(!targets.length){                                  // never strand the swarm
-    const R=region();
-    for(let k=0;k<160;k++) targets.push({x:R.x0+Math.random()*(R.x1-R.x0), y:R.y0+Math.random()*(R.y1-R.y0), c:4});
+function line3(g,a,b){ const p=proj(a[0],a[1],a[2]), q=proj(b[0],b[1],b[2]);
+  g.beginPath(); g.moveTo(p[0],p[1]); g.lineTo(q[0],q[1]); g.stroke(); }
+function drawBoxG(g,x,y0,z,w,h,d,alpha,col,ry){
+  const cr=Math.cos(ry||0), sr=Math.sin(ry||0);
+  const rot=(lx,lz)=>[x+lx*cr-lz*sr, z+lx*sr+lz*cr];
+  const V=[];
+  for(const [lx,ly,lz] of [[-1,0,-1],[1,0,-1],[1,0,1],[-1,0,1],[-1,1,-1],[1,1,-1],[1,1,1],[-1,1,1]]){
+    const [wx,wz]=rot(lx*w/2,lz*d/2); V.push(proj(wx, y0+ly*h, wz));
   }
-  const n=targets.length;
-  for(let i=0;i<NP;i++){
-    const t=targets[(i*7919+loops*37)%n];
-    const p=P[i];
-    p.fx=p.x; p.fy=p.y;
-    p.tx=t.x+(Math.random()-0.5)*1.2; p.ty=t.y+(Math.random()-0.5)*1.2;
-    p.tc=t.c; p.delay=Math.random()*0.42; p.sw=(Math.random()*2-1);
+  const faces=[[0,1,5,4],[2,3,7,6],[1,2,6,5],[3,0,4,7],[4,5,6,7]];
+  const norms=[[0,0,-1],[0,0,1],[1,0,0],[-1,0,0],[0,1,0]];
+  g.lineWidth=1;
+  for(let f=0;f<5;f++){
+    const n=norms[f], nx=n[0]*cr-n[2]*sr, nz=n[0]*sr+n[2]*cr;
+    if(projN(nx,n[1],nz)<=0.001) continue;
+    g.beginPath();
+    faces[f].forEach((vi,k)=>{ const p=V[vi]; k?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); });
+    g.closePath(); g.fillStyle='#000'; g.fill();
+    g.strokeStyle=col||'#e9f2f4'; g.globalAlpha=alpha; g.stroke(); g.globalAlpha=1;
   }
 }
 
-/* ---------- target builders ---------- */
-function buildMap(){
-  const R=region(), cols=WORLD[0].length, rows=WORLD.length;
-  const cw=(R.x1-R.x0)/cols, chh=Math.min(cw*1.35,(R.y1-R.y0)/rows);
-  const oy=R.y0+((R.y1-R.y0)-rows*chh)/2;
-  const T=[];
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++)
-    if(WORLD[r][c]==='#') T.push({x:R.x0+c*cw, y:oy+r*chh, c:0});
-  for(const [pc,pr] of PINGS) T.push({x:R.x0+pc*cw, y:oy+pr*chh, c:1});
-  scaffold={kind:'map', cw, chh, oy, R};
-  return T;
-}
-function buildTape(){
-  const R=region();
-  const lines=[
-    'INFL '+CATS[3].idx[0][2].toFixed(1)+'%',
-    'CAPEX $'+(CATS[1].idx[0][2]/1e9).toFixed(1)+'B',
-    'KOST $'+(CATS[0].idx[0][2]/1e6).toFixed(2)+'M',
+/* ---- live data ---- */
+const SER=[]; let serV=0.55;
+for(let k=0;k<44;k++){ serV=Math.min(.92,Math.max(.08,serV+(Math.random()-.5)*.09)); SER.push(serV); }
+let serT=0;
+const fam=()=>getComputedStyle(document.body).fontFamily;
+
+/* tape texture: live prints */
+const tapeTex=document.createElement('canvas'); tapeTex.width=110; tapeTex.height=230;
+function paintTape(){
+  const x=tapeTex.getContext('2d');
+  x.clearRect(0,0,110,230);
+  x.strokeStyle='rgba(233,242,244,.5)'; x.strokeRect(1,1,108,228);
+  const rows=[
+    ['INFL',CATS[3].idx[0][2].toFixed(1)+'%',CATS[3].idx[0][4]],
+    ['KOST','$'+(CATS[0].idx[0][2]/1e6).toFixed(2)+'M',CATS[0].idx[0][4]],
+    ['CAPEX','$'+(CATS[1].idx[0][2]/1e9).toFixed(1)+'B',CATS[1].idx[0][4]],
+    ['POWER',CATS[2].idx[0][2].toFixed(1)+'%',CATS[2].idx[0][4]],
+    ['VOL',CATS[5].idx[0][2].toFixed(1),CATS[5].idx[0][4]],
   ];
-  const off=document.createElement('canvas');
-  off.width=760; off.height=340;
-  const ox=off.getContext('2d');
-  ox.font='700 84px '+getComputedStyle(document.body).fontFamily;
-  ox.textBaseline='top';
-  lines.forEach((s,i)=>ox.fillText(s,6,8+i*112));
-  const img=ox.getImageData(0,0,off.width,off.height).data;
-  const T=[], step=5;
-  const sc=Math.min((R.x1-R.x0)/off.width, (R.y1-R.y0)/off.height);
-  const bx=R.x0+((R.x1-R.x0)-off.width*sc)/2, by=R.y0+((R.y1-R.y0)-off.height*sc)/2;
-  for(let y=0;y<off.height;y+=step) for(let x=0;x<off.width;x+=step)
-    if(img[(y*off.width+x)*4+3]>110)
-      T.push({x:bx+x*sc, y:by+y*sc, c: Math.random()<0.1?1:0});
-  scaffold={kind:'tape', R};
-  return T;
-}
-function buildSurface(){
-  const R=region(), T=[];
-  const pw=(R.x1-R.x0), ph2=(R.y1-R.y0);
-  const panels=[
-    {x0:R.x0, x1:R.x0+pw*0.46, y0:R.y0+ph2*0.06, y1:R.y0+ph2*0.55},
-    {x0:R.x0+pw*0.54, x1:R.x1, y0:R.y0+ph2*0.02, y1:R.y0+ph2*0.48},
-    {x0:R.x0+pw*0.12, x1:R.x0+pw*0.88, y0:R.y0+ph2*0.64, y1:R.y1},
-  ];
-  const walks=[];
-  /* panel 0: two line series */
-  for(const [ci,seed] of [[2,1],[0,2]]){
-    let v=0.5+seed*0.07; const pts=[];
-    for(let k=0;k<=56;k++){ v=Math.min(0.95,Math.max(0.05,v+(Math.random()-0.5)*0.09));
-      pts.push([panels[0].x0+(panels[0].x1-panels[0].x0)*k/56,
-                panels[0].y1-(panels[0].y1-panels[0].y0)*v]); }
-    walks.push({pts,ci});
-    for(let k=0;k<pts.length-1;k++){
-      const seg=2+((k*13)%2);
-      for(let s2=0;s2<seg;s2++){ const f=s2/seg;
-        T.push({x:pts[k][0]+(pts[k+1][0]-pts[k][0])*f, y:pts[k][1]+(pts[k+1][1]-pts[k][1])*f, c:ci}); }
-    }
-    T.push({x:pts[pts.length-1][0], y:pts[pts.length-1][1], c:1});
-  }
-  /* panel 1: candles */
-  const nc=11, cwid=(panels[1].x1-panels[1].x0)/nc;
-  let base=0.5;
-  for(let k=0;k<nc;k++){
-    const o=base, cl=Math.min(0.92,Math.max(0.08,o+(Math.random()-0.5)*0.3)); base=cl;
-    const hi=Math.max(o,cl)+Math.random()*0.1, lo=Math.min(o,cl)-Math.random()*0.1;
-    const cx2=panels[1].x0+cwid*(k+0.5);
-    const Y=v=>panels[1].y1-(panels[1].y1-panels[1].y0)*v;
-    const col=cl>=o?2:3;
-    for(let s2=0;s2<=6;s2++) T.push({x:cx2, y:Y(lo)+(Y(hi)-Y(lo))*s2/6, c:col});
-    for(const vy of [o,cl]) for(const dx of [-cwid*0.24,cwid*0.24,0])
-      T.push({x:cx2+dx, y:Y(vy), c:col});
-    for(let s2=1;s2<4;s2++){ T.push({x:cx2-cwid*0.24, y:Y(o)+(Y(cl)-Y(o))*s2/4, c:col});
-      T.push({x:cx2+cwid*0.24, y:Y(o)+(Y(cl)-Y(o))*s2/4, c:col}); }
-  }
-  /* panel 2: area steps */
-  let v2=0.3;
-  for(let k=0;k<=64;k++){
-    v2=Math.min(0.95,Math.max(0.05,v2+(Math.random()-0.5)*0.11));
-    const x=panels[2].x0+(panels[2].x1-panels[2].x0)*k/64;
-    const yTop=panels[2].y1-(panels[2].y1-panels[2].y0)*v2;
-    T.push({x, y:yTop, c:0});
-    if(k%4===0) for(let s2=1;s2<=2;s2++)
-      T.push({x, y:yTop+(panels[2].y1-yTop)*s2/3, c:4});
-  }
-  scaffold={kind:'surface', panels, walks};
-  return T;
-}
-function buildSeal(){
-  const R=region(), T=[];
-  const pick=[loops%8,(loops+3)%8,(loops+5)%8];
-  const chh=(R.y1-R.y0)*0.72, cwd=chh*63/88, gap=Math.max(18,(R.x1-R.x0-3*cwd)/4);
-  const total=3*cwd+2*gap, sx=R.x0+((R.x1-R.x0)-total)/2, sy=R.y0+((R.y1-R.y0)-chh)/2;
-  const cards=[];
-  pick.forEach((ci,k)=>{
-    const x0=sx+k*(cwd+gap), y0=sy;
-    cards.push({x0,y0,w:cwd,h:chh,ci});
-    const per=2*(cwd+chh), n=Math.floor(per/3.2);
-    for(let s2=0;s2<n;s2++){
-      const d=per*s2/n; let x,y;
-      if(d<cwd){ x=x0+d; y=y0; }
-      else if(d<cwd+chh){ x=x0+cwd; y=y0+(d-cwd); }
-      else if(d<2*cwd+chh){ x=x0+cwd-(d-cwd-chh); y=y0+chh; }
-      else { x=x0; y=y0+chh-(d-2*cwd-chh); }
-      T.push({x,y,c:0});
-    }
-    const rows=SEALS[CATS[ci].ch], px=cwd*0.44/10, gx=x0+(cwd-10*px)/2, gy=y0+chh*0.13;
-    for(let r=0;r<10;r++) for(let c2=0;c2<10;c2++)
-      if(rows[r][c2]==='#'){ T.push({x:gx+c2*px+px/2, y:gy+r*px+px/2, c:1});
-        if(px>7) T.push({x:gx+c2*px+px/2+2, y:gy+r*px+px/2+2, c:1}); }
-    const uy=y0+chh*0.68;
-    for(let s2=0;s2<=Math.floor(cwd*0.62/4);s2++) T.push({x:x0+cwd*0.19+s2*4, y:uy, c:4});
+  x.textAlign='left'; x.font='11px '+fam();
+  rows.forEach((r,i)=>{
+    x.fillStyle='rgba(233,242,244,.65)';
+    x.fillText(r[0],8,26+i*30);
+    x.fillStyle=r[2]>=0?'#5fd6a9':'#e0687c';
+    x.font='700 12px '+fam();
+    x.fillText(r[1],8,40+i*30);
+    x.font='11px '+fam();
   });
-  scaffold={kind:'seal', cards};
-  return T;
+  x.fillStyle='rgba(233,242,244,.3)'; x.font='8px '+fam(); x.textAlign='center';
+  x.fillText('— LIVE PRINTS —',55,218);
 }
-function rebuildAll(){
-  targets=[buildMap,buildTape,buildSurface,buildSeal][phase]();
-  assign();
-}
-
-/* ---------- direct-drawn scaffolding per phase ---------- */
-function drawScaffold(a, now){
-  if(!scaffold) return;
-  const fam=getComputedStyle(document.body).fontFamily;
-  sctx.lineWidth=1;
-  if(scaffold.kind==='map'){
-    const {R}=scaffold;
-    sctx.strokeStyle='#6a6f78'; sctx.globalAlpha=0.16*a;
-    for(let k=0;k<=4;k++){ const y=R.y0+(R.y1-R.y0)*k/4;
-      sctx.beginPath(); sctx.moveTo(R.x0,y); sctx.lineTo(R.x1,y); sctx.stroke(); }
-    for(let k=0;k<=6;k++){ const x=R.x0+(R.x1-R.x0)*k/6;
-      sctx.beginPath(); sctx.moveTo(x,R.y0); sctx.lineTo(x,R.y1); sctx.stroke(); }
-    /* pings */
-    const cols=WORLD[0].length, rows=WORLD.length;
-    const cw=scaffold.cw, chh=scaffold.chh, oy=scaffold.oy;
-    PINGS.forEach(([pc,pr],i)=>{
-      const t=((now*0.7)+i*0.35)%1;
-      sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=a*(1-t)*0.8;
-      sctx.beginPath(); sctx.arc(R.x0+pc*cw, oy+pr*chh, 4+t*26, 0, 6.2832); sctx.stroke();
-    });
-    sctx.globalAlpha=1;
-  }
-  if(scaffold.kind==='tape'){
-    const {R}=scaffold;
-    sctx.fillStyle='#e9f2f4'; sctx.font='10px '+fam; sctx.textAlign='left';
-    const seed=Math.floor(now*2.5);
-    sctx.globalAlpha=0.13*a;
-    for(let c2=0;c2<12;c2++) for(let r=0;r<7;r++){
-      const h=(c2*31+r*17+seed*7)%10;
-      sctx.fillText(String(h), R.x0+c2*(R.x1-R.x0)/12, R.y1-8-r*14);
-    }
-    sctx.globalAlpha=1; sctx.textAlign='center';
-  }
-  if(scaffold.kind==='surface'){
-    for(const p2 of scaffold.panels){
-      sctx.strokeStyle='#6a6f78'; sctx.globalAlpha=0.3*a;
-      sctx.strokeRect(p2.x0-8,p2.y0-8,(p2.x1-p2.x0)+16,(p2.y1-p2.y0)+16);
-      sctx.globalAlpha=0.14*a;
-      for(let k=1;k<3;k++){ const y=p2.y0+(p2.y1-p2.y0)*k/3;
-        sctx.beginPath(); sctx.moveTo(p2.x0,y); sctx.lineTo(p2.x1,y); sctx.stroke(); }
-    }
-    sctx.globalAlpha=1;
-  }
-  if(scaffold.kind==='seal'){
-    for(const cd of scaffold.cards){
-      const c=CATS[cd.ci];
-      /* corner brackets */
-      sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=0.85*a; sctx.lineWidth=1.4;
-      const L=Math.min(14,cd.w*0.09), s2=7;
-      const corn=[[cd.x0-s2,cd.y0-s2,1,1],[cd.x0+cd.w+s2,cd.y0-s2,-1,1],
-                  [cd.x0+cd.w+s2,cd.y0+cd.h+s2,-1,-1],[cd.x0-s2,cd.y0+cd.h+s2,1,-1]];
-      for(const [x,y,dx,dy] of corn){
-        sctx.beginPath(); sctx.moveTo(x+L*dx,y); sctx.lineTo(x,y); sctx.lineTo(x,y+L*dy); sctx.stroke();
-      }
-      sctx.lineWidth=1;
-      sctx.fillStyle='#e9f2f4'; sctx.textAlign='center'; sctx.globalAlpha=0.95*a;
-      sctx.font='11px '+fam;
-      sctx.fillText(c.name.toUpperCase(), cd.x0+cd.w/2, cd.y0+cd.h*0.63);
-      const ix=c.idx[0];
-      sctx.fillStyle=ix[4]>=0?'#5fd6a9':'#e0687c';
-      sctx.font='12px '+fam;
-      sctx.fillText(ix[0]+'  '+fmtVal(ix), cd.x0+cd.w/2, cd.y0+cd.h*0.78);
-      sctx.fillStyle='#6a6f78'; sctx.font='8px '+fam;
-      sctx.fillText('· '+['I','II','III','IV','V','VI','VII','VIII'][cd.ci]+' · KOPS ARCANA ·', cd.x0+cd.w/2, cd.y0+cd.h*0.9);
-      sctx.globalAlpha=1;
-    }
-  }
+/* arcana card texture */
+const cardTex=document.createElement('canvas'); cardTex.width=105; cardTex.height=147;
+let sealIdx=0;
+function paintCard(){
+  const c=CATS[sealIdx], x=cardTex.getContext('2d');
+  x.clearRect(0,0,105,147);
+  x.strokeStyle='rgba(233,242,244,.9)'; x.lineWidth=2; x.strokeRect(1,1,103,145);
+  x.strokeStyle='rgba(233,242,244,.3)'; x.lineWidth=1; x.strokeRect(6,6,93,135);
+  x.fillStyle='#6a6f78'; x.font='8px '+fam(); x.textAlign='center';
+  x.fillText('· '+['I','II','III','IV','V','VI','VII','VIII'][sealIdx]+' ·',52,18);
+  x.strokeStyle='#ff5a45'; x.lineWidth=1.6; x.strokeRect(30,26,44,44);
+  const rows=SEALS[c.ch], px=4;
+  x.fillStyle='#ff5a45';
+  for(let r=0;r<10;r++) for(let c2=0;c2<10;c2++)
+    if(rows[r][c2]==='#') x.fillRect(32.5+c2*px, 28.5+r*px, px*.86, px*.86);
+  x.fillStyle='#e9f2f4'; x.font='9px '+fam();
+  x.fillText(c.name.toUpperCase(),52,90);
+  const ix=c.idx[0];
+  x.fillStyle=ix[4]>=0?'#5fd6a9':'#e0687c'; x.font='10px '+fam();
+  x.fillText(fmtVal(ix),52,106);
+  x.fillStyle='#6a6f78'; x.font='6.5px '+fam();
+  x.fillText('KOPS ARCANA',52,132);
 }
 
-/* ---------- main loop ---------- */
-let lastT=performance.now()/1000, capPrev='';
-let hudSealT=0;
+/* ---- flow + chain + fx ---- */
+const FLOW=[]; const CHAINB=[]; let strikes=0, strikeT=0, flash=0, ghostA=1, ghostPrev=7;
+let temp=0, moveAcc=0, lastMX=0, lastMY=0, haveM=false;
+addEventListener('pointermove',e=>{
+  if(haveM) moveAcc+=Math.hypot(e.clientX-lastMX,e.clientY-lastMY);
+  lastMX=e.clientX; lastMY=e.clientY; haveM=true;
+});
+/* waypoints: globe → tape top → chart in → chart out → card */
+const WAYS=[[GLOBE.x+0.7,GLOBE.y-0.1,GLOBE.z+0.3],[TAPE.x,TAPE.h+0.25,TAPE.z],
+            [CHART.x-CHART.w/2,CHART.y0+0.9,CHART.z],[CHART.x+CHART.w/2,CHART.y0+1.1,CHART.z],
+            [CARD.x,CARD.cy,CARD.cz]];
+function flowPos(t,j){
+  const seg=Math.min(WAYS.length-2,Math.floor(t*(WAYS.length-1)));
+  const f=t*(WAYS.length-1)-seg;
+  const a=WAYS[seg], b=WAYS[seg+1];
+  const arc=Math.sin(f*Math.PI)*0.22;
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f+arc+j*0.08, a[2]+(b[2]-a[2])*f+j*0.1];
+}
+
+const DIGF={'0':['.###.','#...#','#...#','#...#','.###.'],'1':['..#..','.##..','..#..','..#..','.###.'],
+'2':['.###.','#...#','..##.','.#...','#####'],'3':['####.','....#','..##.','....#','####.'],
+'4':['#..#.','#..#.','#####','...#.','...#.'],'5':['#####','#....','####.','....#','####.'],
+'6':['.###.','#....','####.','#...#','.###.'],'7':['#####','....#','...#.','..#..','..#..'],
+'8':['.###.','#...#','.###.','#...#','.###.'],'9':['.###.','#...#','.####','....#','.###.']};
+
+let introT=0, lastT=performance.now()/1000;
 function frame(){
   const now=performance.now()/1000;
   const rawDt=now-lastT, stepDt=Math.min(0.35,rawDt); lastT=now;
-  phT+=stepDt;
-  const ph=PHASES[phase];
-  if(phT>=ph.dur){
-    phT=0; phase=(phase+1)%4;
-    if(phase===0) loops++;
-    /* tick a couple of live indices at each metamorphosis */
-    for(let k=0;k<2;k++){ const ci=(Math.random()*8)|0;
-      tickIndex(ci,(Math.random()*CATS[ci].idx.length)|0); }
-    rebuildAll();
-  }
-  /* hud seal cycles independently */
-  hudSealT+=stepDt;
-  if(hudSealT>2.2){ hudSealT=0; drawHudMark(document.getElementById('mark-hud'), CATS[(loops*4+phase)%8].ch); }
+  temp=Math.max(0,Math.min(2.5,temp+moveAcc*0.01)*0.94); moveAcc=0;
+  introT+=stepDt;
+  const it=Math.min(1,introT/6);
+  const rev={ground:easeSmooth(it/0.22), globe:easeSmooth((it-0.1)/0.26),
+             tape:easeSmooth((it-0.22)/0.26), chart:easeSmooth((it-0.34)/0.26),
+             card:easeSmooth((it-0.46)/0.26), call:easeSmooth((it-0.64)/0.3)};
 
-  drawWordmark(document.getElementById('wordmark'), easeSmooth(Math.min(1,(now)/3)));
+  drawWordmark(document.getElementById('wordmark'), easeSmooth(it/0.5));
+
+  /* live series scroll */
+  serT+=stepDt*(1+temp*0.6);
+  if(serT>0.24){ serT=0;
+    serV=Math.min(.92,Math.max(.08,serV+(Math.random()-.5)*.09));
+    SER.push(serV); SER.shift(); }
+
+  /* strike cycle */
+  if(it>0.6){
+    strikeT+=stepDt*(1+temp*0.5);
+    if(strikeT>3.1){
+      strikeT=0; strikes++;
+      ghostPrev=sealIdx; sealIdx=(sealIdx+1)%8; ghostA=0; flash=1;
+      tickIndex(sealIdx,(Math.random()*CATS[sealIdx].idx.length)|0);
+      paintCard(); paintTape();
+      drawHudMark(document.getElementById('mark-hud'), CATS[sealIdx].ch);
+      CHAINB.push({born:now});
+      if(CHAINB.length>9) CHAINB.shift();
+    }
+  }
+  ghostA=Math.min(1,ghostA+stepDt*1.3);
+  if(flash>0) flash-=stepDt*1.8;
 
   sctx.setTransform(DPR,0,0,DPR,0,0);
   sctx.clearRect(0,0,W,H);
+  if(!REDUCE){ CX=W*0.52+Math.sin(now*0.13)*6; CY=H*0.40+Math.cos(now*0.09)*4; }
 
-  const morphA=Math.min(1,phT/MORPH);          // 0..1 during metamorphosis
-  const settle=easeSmooth((phT-MORPH*0.7)/(MORPH*0.6));
-
-  drawScaffold(settle, now);
-
-  /* the swarm */
-  const moving=morphA<1;
-  for(let i=0;i<NP;i++){
-    const p=P[i];
-    const m=easeIO(Math.min(1,Math.max(0,(phT-p.delay)/(MORPH-0.3))));
-    let x,y;
-    if(m>=1){ x=p.tx; y=p.ty;
-      if(!REDUCE){ x+=Math.sin(now*2.1+i)*0.7; y+=Math.cos(now*1.7+i*1.3)*0.7; } }
-    else{
-      x=p.fx+(p.tx-p.fx)*m; y=p.fy+(p.ty-p.fy)*m;
-      /* swirl: perpendicular arc, strongest mid-flight */
-      const dx2=p.tx-p.fx, dy2=p.ty-p.fy, L=Math.hypot(dx2,dy2)||1;
-      const amp=Math.min(90,L*0.3)*p.sw*Math.sin(m*Math.PI);
-      x+=-dy2/L*amp; y+=dx2/L*amp;
-    }
-    p.x=x; p.y=y;
-    const col=COLS[p.tc];
-    if(moving && !REDUCE){
-      /* chromatic split while in flight */
-      sctx.globalAlpha=0.35;
-      sctx.fillStyle='#ff5a45'; sctx.fillRect(x-2.6,y-0.9,1.8,1.8);
-      sctx.fillStyle='#5fd6a9'; sctx.fillRect(x+0.8,y-0.9,1.8,1.8);
-    }
-    sctx.globalAlpha=p.tc===4?0.5:0.9;
-    sctx.fillStyle=col;
-    sctx.fillRect(x-0.9,y-0.9,1.8,1.8);
+  /* ghost seal (deep layer, crossfades on strike) */
+  if(it>0.3){
+    const px=Math.min(26,W*0.018), ox=CX-2.4*S, oy=CY-3.2*S;
+    const drawG=(si,alpha)=>{ const rows=SEALS[CATS[si].ch];
+      sctx.fillStyle='#e9f2f4'; sctx.globalAlpha=alpha;
+      for(let r=0;r<10;r++) for(let c2=0;c2<10;c2++)
+        if(rows[r][c2]==='#') sctx.fillRect(ox+c2*px, oy+r*px, px*.88, px*.88);
+      sctx.globalAlpha=1; };
+    drawG(ghostPrev, 0.045*(1-ghostA)*easeSmooth((it-.3)/.2));
+    drawG(sealIdx, 0.05*ghostA*easeSmooth((it-.3)/.2));
   }
+
+  /* fogged ground */
+  const fogOf=z2=>Math.max(0.32,1-((z2+2.6)/5.2)*0.62);
+  sctx.strokeStyle='#7e8180'; sctx.lineWidth=1.5;
+  const g=rev.ground;
+  const seg=(a,b)=>{ const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+    sctx.globalAlpha=0.15*fogOf((a[2]+b[2])/2);
+    sctx.beginPath(); sctx.moveTo(mx+(a[0]-mx)*g,my+(a[1]-my)*g); sctx.lineTo(mx+(b[0]-mx)*g,my+(b[1]-my)*g); sctx.stroke(); };
+  for(let x=GROUND.x0;x<=GROUND.x1+.01;x+=GROUND.step)
+    for(let z=GROUND.z0;z<GROUND.z1-.01;z+=GROUND.step) seg(proj(x,0,z),proj(x,0,z+GROUND.step));
+  for(let z=GROUND.z0;z<=GROUND.z1+.01;z+=GROUND.step)
+    for(let x=GROUND.x0;x<GROUND.x1-.01;x+=GROUND.step) seg(proj(x,0,z),proj(x+GROUND.step,0,z));
   sctx.globalAlpha=1;
 
-  /* phase caption, typing in */
-  {
-    const R=region(), fam=getComputedStyle(document.body).fontFamily;
-    const cap='// '+ph.cap;
-    const nshow=Math.floor(easeSmooth(phT/1.1)*cap.length);
-    sctx.font='10px '+fam; sctx.textAlign='center';
-    sctx.fillStyle='#e9f2f4'; sctx.globalAlpha=0.8;
-    sctx.fillText(cap.slice(0,nshow).toUpperCase(), (R.x0+R.x1)/2, Math.min(H-16,R.y1+34));
+  /* floor inscription: prices struck */
+  if(it>0.4){
+    const s=String(strikes).padStart(3,'0'), px=Math.min(17,W*0.012), gp=px*6;
+    const ox=CX-1.1*S, oy=CY+1.5*S;
+    sctx.fillStyle='#fff'; sctx.globalAlpha=0.06;
+    for(let d2=0;d2<s.length;d2++){ const gph=DIGF[s[d2]];
+      for(let r=0;r<5;r++) for(let c2=0;c2<5;c2++)
+        if(gph[r][c2]==='#') sctx.fillRect(ox+d2*gp+c2*px, oy+r*px, px*.88, px*.88); }
+    sctx.font='9px '+fam(); sctx.textAlign='left'; sctx.globalAlpha=0.14;
+    sctx.fillText('PRICES STRUCK', ox, oy+5*px+14);
+    sctx.textAlign='center'; sctx.globalAlpha=1;
+  }
+
+  /* ---- station i: the world ---- */
+  if(rev.globe>0.001){
+    const {x,y,z,r}=GLOBE, gr=r*rev.globe;
+    sctx.strokeStyle='#e9f2f4';
+    const ring=(cy2,rr,alpha)=>{ sctx.globalAlpha=alpha; sctx.beginPath();
+      for(let k=0;k<=30;k++){ const ph=k/30*6.283;
+        const p=proj(x+Math.cos(ph)*rr, cy2, z+Math.sin(ph)*rr);
+        k?sctx.lineTo(p[0],p[1]):sctx.moveTo(p[0],p[1]); }
+      sctx.stroke(); sctx.globalAlpha=1; };
+    ring(y,gr,0.8*rev.globe);
+    ring(y+gr*0.5,gr*0.86,0.4*rev.globe);
+    ring(y-gr*0.5,gr*0.86,0.4*rev.globe);
+    const spin=REDUCE?0.4:now*0.45;
+    for(let m=0;m<3;m++){
+      const th=spin+m*1.047, ux=Math.cos(th), uz=Math.sin(th);
+      sctx.globalAlpha=0.45*rev.globe; sctx.beginPath();
+      for(let k=0;k<=26;k++){ const ph=k/26*6.283;
+        const p=proj(x+ux*Math.cos(ph)*gr, y+Math.sin(ph)*gr, z+uz*Math.cos(ph)*gr);
+        k?sctx.lineTo(p[0],p[1]):sctx.moveTo(p[0],p[1]); }
+      sctx.stroke(); sctx.globalAlpha=1;
+    }
+    sctx.globalAlpha=0.45*rev.globe;
+    line3(sctx,[x,0,z],[x,y-gr,z]); sctx.globalAlpha=1;
+    /* signal pings on the surface */
+    const sites=[[0.5,0.4],[2.2,0.15],[3.6,0.5],[5.1,-0.3]];
+    sites.forEach(([lon,lat],i)=>{
+      const lx=Math.cos(lat)*Math.cos(lon+spin), ly=Math.sin(lat), lz2=Math.cos(lat)*Math.sin(lon+spin);
+      if(projN(lx,0,lz2)<0.05) return;
+      const p=proj(x+lx*gr, y+ly*gr, z+lz2*gr);
+      sctx.fillStyle='#ff5a45'; sctx.globalAlpha=0.95*rev.globe;
+      sctx.fillRect(p[0]-1.6,p[1]-1.6,3.2,3.2);
+      const t2=((now*0.8)+i*0.4)%1;
+      sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=(1-t2)*0.7*rev.globe;
+      sctx.beginPath(); sctx.arc(p[0],p[1],3+t2*16,0,6.2832); sctx.stroke();
+      sctx.globalAlpha=1;
+    });
+  }
+
+  /* ---- station ii: the tape ---- */
+  if(rev.tape>0.001){
+    drawBoxG(sctx,TAPE.x,0,TAPE.z,TAPE.w,TAPE.h*rev.tape,TAPE.d,0.9,'#e9f2f4',0);
+    if(rev.tape>0.7){
+      const hw2=TAPE.w*0.44, y1=TAPE.h*0.96, y0=TAPE.h*0.05, zf=TAPE.z+TAPE.d/2+0.012;
+      const TL=proj(TAPE.x-hw2,y1,zf), TR=proj(TAPE.x+hw2,y1,zf), BL=proj(TAPE.x-hw2,y0,zf);
+      sctx.save();
+      sctx.globalAlpha=easeSmooth((rev.tape-0.7)/0.3);
+      sctx.setTransform((TR[0]-TL[0])/tapeTex.width*DPR,(TR[1]-TL[1])/tapeTex.width*DPR,
+                        (BL[0]-TL[0])/tapeTex.height*DPR,(BL[1]-TL[1])/tapeTex.height*DPR,
+                        TL[0]*DPR,TL[1]*DPR);
+      sctx.drawImage(tapeTex,0,0);
+      sctx.restore(); sctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+  }
+
+  /* ---- station iii: the surfaces (live chart in a wireframe case) ---- */
+  if(rev.chart>0.001){
+    const {x,z,w,h,d,y0}=CHART, hh=h*rev.chart;
+    const C=(lx,ly,lz)=>proj(x+lx*w/2, y0+ly*hh, z+lz*d/2);
+    const E=[[[-1,0,-1],[1,0,-1]],[[1,0,-1],[1,0,1]],[[1,0,1],[-1,0,1]],[[-1,0,1],[-1,0,-1]],
+             [[-1,1,-1],[1,1,-1]],[[1,1,-1],[1,1,1]],[[1,1,1],[-1,1,1]],[[-1,1,1],[-1,1,-1]],
+             [[-1,0,-1],[-1,1,-1]],[[1,0,-1],[1,1,-1]],[[1,0,1],[1,1,1]],[[-1,0,1],[-1,1,1]]];
+    sctx.strokeStyle='#e9f2f4'; sctx.globalAlpha=0.55*rev.chart;
+    for(const [a,b] of E){ const p=C(a[0],a[1],a[2]), q=C(b[0],b[1],b[2]);
+      sctx.beginPath(); sctx.moveTo(p[0],p[1]); sctx.lineTo(q[0],q[1]); sctx.stroke(); }
+    sctx.globalAlpha=0.16*rev.chart;
+    for(let k=1;k<3;k++){ const p=C(-1,k/3,0), q=C(1,k/3,0);
+      sctx.beginPath(); sctx.moveTo(p[0],p[1]); sctx.lineTo(q[0],q[1]); sctx.stroke(); }
     sctx.globalAlpha=1;
+    /* the living series */
+    if(rev.chart>0.6){
+      const al=easeSmooth((rev.chart-0.6)/0.4);
+      sctx.strokeStyle='#5fd6a9'; sctx.lineWidth=1.3; sctx.globalAlpha=0.9*al;
+      sctx.beginPath();
+      for(let k=0;k<SER.length;k++){
+        const p=proj(x-w/2+w*k/(SER.length-1), y0+hh*SER[k], z);
+        k?sctx.lineTo(p[0],p[1]):sctx.moveTo(p[0],p[1]);
+      }
+      sctx.stroke(); sctx.lineWidth=1;
+      /* endpoint node + drop */
+      const ep=proj(x+w/2, y0+hh*SER[SER.length-1], z);
+      sctx.fillStyle='#ff5a45'; sctx.globalAlpha=al;
+      sctx.fillRect(ep[0]-2,ep[1]-2,4,4);
+      const t2=(now*1.2)%1;
+      sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=(1-t2)*0.7*al;
+      sctx.beginPath(); sctx.arc(ep[0],ep[1],3+t2*13,0,6.2832); sctx.stroke();
+      sctx.setLineDash([3,3]); sctx.strokeStyle='#e9f2f4'; sctx.globalAlpha=0.3*al;
+      const eb=proj(x+w/2, 0, z);
+      sctx.beginPath(); sctx.moveTo(ep[0],ep[1]); sctx.lineTo(eb[0],eb[1]); sctx.stroke();
+      sctx.setLineDash([]);
+      /* candle boxes along the front edge */
+      for(let k=0;k<8;k++){
+        const v0=SER[k*5], v1=SER[k*5+4]||v0;
+        const up=v1>=v0, ch2=Math.max(0.06,Math.abs(v1-v0))*hh*0.9;
+        drawBoxG(sctx, x-w/2+w*(k+0.5)/8, y0+Math.min(v0,v1)*hh*0.9, z+d/2+0.14,
+          0.13, ch2, 0.1, 0.75*al, up?'#5fd6a9':'#e0687c', 0);
+      }
+      sctx.globalAlpha=1;
+    }
+  }
+
+  /* ---- station iv: the arcana ---- */
+  if(rev.card>0.001){
+    const pr=rev.card, hw=CARD.hw*pr, hh=CARD.hh*pr;
+    const pp=(u,v)=>{ const p=cardPt(u,v); return proj(p[0],p[1],p[2]); };
+    /* face texture */
+    const TL=pp(hw,hh), TR=pp(-hw,hh), BL=pp(hw,-hh);
+    sctx.save();
+    sctx.globalAlpha=pr;
+    sctx.setTransform((TR[0]-TL[0])/cardTex.width*DPR,(TR[1]-TL[1])/cardTex.width*DPR,
+                      (BL[0]-TL[0])/cardTex.height*DPR,(BL[1]-TL[1])/cardTex.height*DPR,
+                      TL[0]*DPR,TL[1]*DPR);
+    sctx.drawImage(cardTex,0,0);
+    sctx.restore(); sctx.setTransform(DPR,0,0,DPR,0,0);
+    /* corner brackets */
+    const bl=0.14, sp=0.1;
+    sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=0.8*pr; sctx.lineWidth=1.2;
+    for(const [cu,cv2,du,dv] of [[-hw-sp,-hh-sp,1,1],[hw+sp,-hh-sp,-1,1],[hw+sp,hh+sp,-1,-1],[-hw-sp,hh+sp,1,-1]]){
+      const o=pp(cu,cv2), pu=pp(cu+bl*du,cv2), pv=pp(cu,cv2+bl*dv);
+      sctx.beginPath(); sctx.moveTo(pu[0],pu[1]); sctx.lineTo(o[0],o[1]); sctx.lineTo(pv[0],pv[1]); sctx.stroke();
+    }
+    sctx.lineWidth=1; sctx.globalAlpha=1;
+    /* anchor + strike flash */
+    const pb=cardPt(0,-hh-0.05), gb=proj(pb[0],0,pb[2]), pbp=proj(pb[0],pb[1],pb[2]);
+    sctx.setLineDash([3,3]); sctx.strokeStyle='#e9f2f4'; sctx.globalAlpha=0.35*pr;
+    sctx.beginPath(); sctx.moveTo(pbp[0],pbp[1]); sctx.lineTo(gb[0],gb[1]); sctx.stroke();
+    sctx.setLineDash([]); sctx.globalAlpha=1;
+    if(flash>0){
+      const p=proj(CARD.x,CARD.cy,CARD.cz);
+      sctx.strokeStyle='#ff5a45'; sctx.globalAlpha=Math.max(0,flash);
+      const r=(1.15-flash)*1.0*S;
+      sctx.beginPath(); sctx.ellipse(p[0],p[1],r,r*0.62,0,0,6.2832); sctx.stroke();
+      sctx.globalAlpha=1;
+    }
+    /* the chain */
+    for(let i=0;i<CHAINB.length;i++){
+      const b=CHAINB[i], age=Math.min(1,(now-b.born)*2.5);
+      drawBoxG(sctx,CHAIN0.x+i*0.44,0,CHAIN0.z,0.3,0.3*age*pr,0.3,0.8*pr,
+        (i===CHAINB.length-1&&age<0.6)?'#ff5a45':'#e9f2f4',0);
+      if(i>0){ sctx.strokeStyle='#e9f2f4'; sctx.globalAlpha=0.35*pr;
+        line3(sctx,[CHAIN0.x+i*0.44-0.29,0.15,CHAIN0.z],[CHAIN0.x+i*0.44-0.15,0.15,CHAIN0.z]);
+        sctx.globalAlpha=1; }
+    }
+  }
+
+  /* ---- the flow ---- */
+  if(it>0.5 && !REDUCE){
+    if(FLOW.length<46 && Math.random()<0.55+temp*0.3)
+      FLOW.push({t:0, sp:0.085+Math.random()*0.05, j:(Math.random()*2-1)});
+    sctx.globalCompositeOperation='lighter';
+    for(let i=FLOW.length-1;i>=0;i--){
+      const f2=FLOW[i]; f2.t+=stepDt*f2.sp*(1+temp*0.4);
+      if(f2.t>=1){ FLOW.splice(i,1); continue; }
+      const w3=flowPos(f2.t,f2.j), p=proj(w3[0],w3[1],w3[2]);
+      sctx.fillStyle=f2.t>0.75?'#ff5a45':'#e9f2f4';
+      sctx.globalAlpha=0.7;
+      sctx.fillRect(p[0]-1,p[1]-1,2,2);
+    }
+    sctx.globalCompositeOperation='source-over'; sctx.globalAlpha=1;
+  }
+
+  /* ---- in-scene callouts (alternating top/bottom, like the swarm plate) ---- */
+  if(rev.call>0.01){
+    const act=Math.floor((now/3.5))%4;
+    const items=[
+      {p:proj(GLOBE.x,GLOBE.y+GLOBE.r+0.15,GLOBE.z), top:true,  t:'THE WORLD',    b:'where the signals live'},
+      {p:proj(TAPE.x,0,TAPE.z+0.3),                  top:false, t:'THE TAPE',     b:'raw prints, on time'},
+      {p:proj(CHART.x,CHART.y0+CHART.h+0.15,CHART.z),top:true,  t:'THE SURFACES', b:'continuous indices'},
+      {p:proj(CHAIN0.x+0.9,0,CHAIN0.z+0.2),          top:false, t:'THE ARCANA',   b:'sealed on-chain'},
+    ];
+    items.forEach((c2,i)=>{
+      const a=rev.call, hot=i===act;
+      const px2=Math.max(110,Math.min(W-110,c2.p[0]));
+      const py=c2.top? c2.p[1]-52 : c2.p[1]+66;
+      sctx.strokeStyle='#e9f2f4'; sctx.globalAlpha=0.5*a; sctx.setLineDash([3,3]);
+      sctx.beginPath(); sctx.moveTo(c2.p[0],c2.p[1]+(c2.top?-6:6));
+      sctx.lineTo(c2.p[0], c2.top?py+10:py-22); sctx.stroke(); sctx.setLineDash([]);
+      sctx.globalAlpha=0.85*a; sctx.beginPath(); sctx.arc(c2.p[0],c2.p[1],5,0,6.2832); sctx.stroke();
+      sctx.textAlign='center'; sctx.fillStyle=hot?'#ff5a45':'#e9f2f4';
+      sctx.font='10px '+fam(); sctx.globalAlpha=a*(hot?1:0.8);
+      sctx.fillText(c2.t,px2,py-8);
+      const w2=sctx.measureText(c2.t).width;
+      sctx.strokeStyle=hot?'#ff5a45':'#e9f2f4'; sctx.globalAlpha=a*0.7;
+      sctx.beginPath(); sctx.moveTo(px2-w2/2-8,py-3); sctx.lineTo(px2+w2/2+8,py-3); sctx.stroke();
+      sctx.fillStyle='#e9f2f4'; sctx.globalAlpha=a*0.55; sctx.font='9px '+fam();
+      sctx.fillText(c2.b,px2,py+9);
+      sctx.globalAlpha=1;
+    });
   }
 
   /* composite + bloom */
@@ -771,12 +823,14 @@ function frame(){
   ctx.fillStyle='#000'; ctx.fillRect(0,0,cv.width,cv.height);
   ctx.drawImage(SC,0,0);
   if(FILTER_OK){ ctx.save(); ctx.filter='blur(5px)'; ctx.globalCompositeOperation='lighter';
-    ctx.globalAlpha=0.5; ctx.drawImage(SC,0,0); ctx.restore(); }
+    ctx.globalAlpha=0.52; ctx.drawImage(SC,0,0); ctx.restore(); }
 
-  document.getElementById('feedN').innerHTML='<b>'+ph.key+'</b> · loop '+String(loops+1).padStart(2,'0');
-  document.getElementById('hudst').textContent='oracle live · '+ph.cap.split('—')[0].trim();
+  document.getElementById('feedN').innerHTML='<b>'+strikes+'</b> prices struck';
+  document.getElementById('hudst').textContent = it<1 ? 'oracle · assembling the line'
+    : 'oracle live · seal '+CATS[sealIdx].ch+' · '+CATS[sealIdx].name;
   requestAnimationFrame(frame);
 }
+paintTape(); paintCard();
 drawHudMark(document.getElementById('mark-hud'), CATS[0].ch);
 resize();
 requestAnimationFrame(frame);
